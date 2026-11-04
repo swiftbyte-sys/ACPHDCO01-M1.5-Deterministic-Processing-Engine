@@ -40,6 +40,8 @@ def fit_sem(data: pd.DataFrame, model_description: str) -> dict[str, Any]:
         model.fit(data)
         estimates = model.inspect()
         fit = calc_stats(model)
+        solver_result = getattr(model, "last_result", None)
+        converged = bool(getattr(solver_result, "success", False))
     except Exception as exc:
         raise StatisticalModelError(f"SEM estimation failed: {exc}") from exc
 
@@ -57,7 +59,7 @@ def fit_sem(data: pd.DataFrame, model_description: str) -> dict[str, Any]:
         "model_description": model_description,
         "estimates": estimates.to_dict(orient="records"),
         "fit_indices": fit_values,
-        "converged": True,
+        "converged": converged,
         "limitations": [
             "Convergence does not establish model correctness or causal identification.",
             "Fit indices must be interpreted in light of estimator, sample size, identification, and data assumptions."
