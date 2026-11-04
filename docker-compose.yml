@@ -1,0 +1,8 @@
+services:
+  benchmark:
+    build: .
+    volumes:
+      - ./data:/data
+    environment:
+      PYTHONUNBUFFERED: "1"
+    restart: "no"
