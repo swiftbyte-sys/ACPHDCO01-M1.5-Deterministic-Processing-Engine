@@ -114,6 +114,14 @@ def test_incomplete_final_wal_record_is_ignored(tmp_path):
         stream.write(b'{"sequence":')
     recovered = QualitativeResearchEngine(path)
     assert recovered.snapshot()["evidence_records"] == 1
+    # Appending after recovery must not concatenate onto the torn WAL tail.
+    recovered.add_evidence(
+        event_id="e2", evidence_id="e2", source_id="s2",
+        source_type="report", excerpt="Second committed evidence",
+    )
+    recovered_again = QualitativeResearchEngine(path)
+    assert recovered_again.snapshot()["evidence_records"] == 2
+    assert recovered_again.snapshot()["sequence"] == 2
 
 
 def test_concurrent_evidence_ingestion_is_thread_safe(tmp_path):
