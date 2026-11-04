@@ -1,0 +1,19 @@
+sequenceDiagram
+ participant G as Generator
+ participant T as Lossy transport
+ participant W as Worker
+ participant E as Engine
+ participant L as WAL
+ G->>T: operation(op_id, trace_id)
+ alt packet dropped
+ T-->>G: no delivery / retry with jitter
+ else delivered
+ T->>W: operation
+ W->>E: process(operation)
+ E->>E: validate + idempotency check
+ E->>L: append record + fsync
+ L-->>E: durable append
+ E->>E: apply state transition
+ E-->>W: committed result
+ W-->>G: result + attempt count
+ end
