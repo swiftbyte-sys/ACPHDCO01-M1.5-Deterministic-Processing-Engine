@@ -30,6 +30,13 @@ def test_sem_smoke():
     assert result["n_observations"] == 500
     assert result["converged"] is True
     assert result["estimates"]
+    # x1 fixes the latent scale; recover the generating loadings approximately.
+    estimates = pd.DataFrame(result["estimates"])
+    loading_x2 = estimates.loc[
+        (estimates["lval"] == "x2") & (estimates["op"] == "~"), "Estimate"
+    ]
+    assert len(loading_x2) == 1
+    assert abs(float(loading_x2.iloc[0]) - 0.8) < 0.15
 
 
 def test_sem_rejects_empty_data():
@@ -57,6 +64,7 @@ def test_longitudinal_mixed_model_smoke():
     assert result["n_entities"] == 30
     assert result["converged"] is True
     assert "Q(\"month\")" in result["formula"]
+    assert abs(result["coefficients"]['Q("month")'] - 0.25) < 0.05
 
 
 def test_longitudinal_rejects_missing_columns():
@@ -84,6 +92,8 @@ def test_panel_models_smoke():
     assert result["n_observations"] == 192
     assert "fixed_effects_entity_and_time" in result
     assert "random_effects" in result
+    # The data-generating coefficient for x is 1.7.
+    assert abs(result["fixed_effects_entity_and_time"]["coefficients"]["x"] - 1.7) < 0.08
 
 
 def test_panel_rejects_no_regressors():
