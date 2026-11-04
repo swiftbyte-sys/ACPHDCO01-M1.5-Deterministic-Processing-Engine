@@ -1,0 +1,20 @@
+{
+  "operations_submitted": 1000,
+  "operations_committed": 1000,
+  "errors": 0,
+  "elapsed_seconds": 1.804808,
+  "throughput_ops_sec": 554.08,
+  "target_rate_ops_sec": 1000.0,
+  "workers": 16,
+  "packet_drop_rate": 0.3,
+  "latency_us": {
+    "p50": 26402.37,
+    "p90": 54391.94,
+    "p99": 124849.76,
+    "p99_9": 147798.43,
+    "mean": 28332.74
+  },
+  "retry_attempts_mean": 1.456,
+  "state_keys": 100,
+  "integrity_check": "PASS"
+}
