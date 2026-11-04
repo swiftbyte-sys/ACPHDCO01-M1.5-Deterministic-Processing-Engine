@@ -64,6 +64,8 @@ class ProcessingEngine:
         return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
     def _emit(self, op: Operation, started_ns: int, status: str, sequence: int | None = None):
+        if not logger.isEnabledFor(logging.INFO):
+            return
         record = {
             "timestamp": self._utc_now(),
             "trace_id": op.trace_id,
