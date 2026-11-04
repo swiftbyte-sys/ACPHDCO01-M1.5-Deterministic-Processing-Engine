@@ -181,7 +181,7 @@ class ProcessingEngine:
 
             if records:
                 payload = b"".join(
-                    (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+                    (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
                     for record in records
                 )
                 with self.wal_path.open("ab", buffering=0) as fh:
