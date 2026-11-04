@@ -1,0 +1,46 @@
+name: M3.5 qualitative research validation
+
+on:
+  push:
+    branches: [m3.5-qualitative-engine]
+  pull_request:
+    branches: [m3.5-qualitative-engine]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualitative-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project and M3.5 test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r requirements-m3.5.txt
+          pip install -r requirements-m2.5.txt
+      - name: Run full test suite with coverage
+        run: |
+          pytest -q --cov=acp_engine --cov-report=term-missing --cov-report=xml --junitxml=m3.5-test-results.xml
+      - name: Run qualitative benchmark with 30 percent simulated request loss
+        run: |
+          python benchmarks/run_qualitative_benchmark.py --ops 10000 --workers 32 --drop-rate 0.30 --output m3.5-qualitative-benchmark.json --wal /tmp/m3.5-qualitative.wal
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3.5-qualitative-validation
+          path: |
+            m3.5-test-results.xml
+            coverage.xml
+            m3.5-qualitative-benchmark.json
+          if-no-files-found: warn
