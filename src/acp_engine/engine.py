@@ -133,6 +133,84 @@ class ProcessingEngine:
             self._emit(op, started, "200_OK", seq)
             return result
 
+    def process_many(self, raws: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Commit a batch with one WAL fsync (group commit).
+
+        The batch is serialized under the same lock as process(). A complete
+        WAL prefix is durable before any corresponding in-memory state is
+        published. Repeated operation IDs within or before the batch remain
+        idempotent.
+        """
+        if not isinstance(raws, list):
+            raise ProcessingError("raws must be a list")
+        if not raws:
+            return []
+        started = [time.perf_counter_ns() for _ in raws]
+        operations = [Operation.from_dict(raw) for raw in raws]
+
+        with self._lock:
+            working_state = dict(self._state)
+            next_sequence = self._sequence
+            pending: dict[str, dict[str, Any]] = {}
+            records = []
+            output_specs = []
+
+            for op in operations:
+                existing = self._results.get(op.op_id) or pending.get(op.op_id)
+                if existing is not None:
+                    output_specs.append((op, dict(existing), True))
+                    continue
+
+                next_sequence += 1
+                old = working_state.get(op.key, 0.0)
+                value = op.value if op.action == "set" else old + op.value
+                working_state[op.key] = value
+                result = {
+                    "op_id": op.op_id, "key": op.key, "value": value,
+                    "sequence": next_sequence, "duplicate": False,
+                }
+                pending[op.op_id] = result
+                records.append({
+                    "sequence": next_sequence,
+                    "operation": {
+                        "op_id": op.op_id, "key": op.key, "action": op.action,
+                        "value": op.value, "trace_id": op.trace_id,
+                    },
+                })
+                output_specs.append((op, dict(result), False))
+
+            if records:
+                payload = b"".join(
+                    (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+                    for record in records
+                )
+                with self.wal_path.open("ab", buffering=0) as fh:
+                    view = memoryview(payload)
+                    while view:
+                        written = fh.write(view)
+                        if not written:
+                            raise OSError("short write while appending WAL batch")
+                        view = view[written:]
+                    if self.fsync:
+                        import os
+                        os.fsync(fh.fileno())
+
+                self._state = working_state
+                self._sequence = next_sequence
+                self._results.update(pending)
+
+            results = []
+            for index, (op, result, duplicate) in enumerate(output_specs):
+                if duplicate:
+                    result["duplicate"] = True
+                self._emit(
+                    op, started[index],
+                    "200_DUPLICATE" if duplicate else "200_OK",
+                    result["sequence"],
+                )
+                results.append(result)
+            return results
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {"sequence": self._sequence, "state": dict(self._state),
