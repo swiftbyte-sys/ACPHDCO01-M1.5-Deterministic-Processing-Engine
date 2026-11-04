@@ -52,3 +52,30 @@ def test_incomplete_tail_is_ignored(tmp_path):
     with p.open("ab") as f: f.write(b'{"partial":')
     recovered=ProcessingEngine(p)
     assert recovered.snapshot()["state"]["x"]==2
+
+def test_group_commit_batch_idempotency_and_recovery(tmp_path):
+    p = tmp_path / "batch.wal"
+    engine = ProcessingEngine(p)
+    operations = [
+        {"op_id": "a", "key": "counter", "action": "add", "value": 2},
+        {"op_id": "a", "key": "counter", "action": "add", "value": 2},
+        {"op_id": "b", "key": "counter", "action": "add", "value": 3},
+        {"op_id": "c", "key": "other", "action": "set", "value": 9},
+    ]
+    results = engine.process_many(operations)
+    assert [item["sequence"] for item in results] == [1, 1, 2, 3]
+    assert [item["duplicate"] for item in results] == [False, True, False, False]
+    assert engine.snapshot()["state"] == {"counter": 5, "other": 9}
+    assert engine.snapshot()["committed_operations"] == 3
+
+    recovered = ProcessingEngine(p)
+    assert recovered.snapshot()["state"] == {"counter": 5, "other": 9}
+    assert recovered.snapshot()["sequence"] == 3
+    assert recovered.snapshot()["committed_operations"] == 3
+
+
+def test_group_commit_empty_batch_and_invalid_input(tmp_path):
+    engine = ProcessingEngine(tmp_path / "empty.wal")
+    assert engine.process_many([]) == []
+    with pytest.raises(ProcessingError):
+        engine.process_many({"op_id": "bad"})
