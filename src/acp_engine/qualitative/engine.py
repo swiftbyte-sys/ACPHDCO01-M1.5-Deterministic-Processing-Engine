@@ -89,7 +89,7 @@ class QualitativeResearchEngine:
 
     @staticmethod
     def _canonical(value: Any) -> str:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
     def _apply(self, event: dict[str, Any]) -> None:
         kind, payload = event["type"], event["payload"]
@@ -192,11 +192,12 @@ class QualitativeResearchEngine:
         source_id = self._required_text(source_id, "source_id", 128)
         source_type = self._required_text(source_type, "source_type", 64)
         excerpt = self._required_text(excerpt, "excerpt", 20000)
-        metadata = metadata or {}
+        if metadata is None:
+            metadata = {}
         if not isinstance(metadata, dict):
             raise QualitativeProcessingError("metadata must be a JSON object")
         try:
-            self._canonical(metadata)
+            metadata = json.loads(self._canonical(metadata))  # detach caller-owned nested objects
         except (TypeError, ValueError) as exc:
             raise QualitativeProcessingError("metadata must be JSON serializable") from exc
         with self._lock:
