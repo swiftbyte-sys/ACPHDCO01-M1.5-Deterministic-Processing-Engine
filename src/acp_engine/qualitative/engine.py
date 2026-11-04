@@ -112,11 +112,19 @@ class QualitativeResearchEngine:
         if not self.wal_path.exists():
             self.wal_path.touch()
             return
+        valid_bytes = 0
         with self.wal_path.open("rb") as stream:
             lines = stream.readlines()
         for index, line in enumerate(lines):
-            if not line.endswith(b"\n"):
+            if not line.endswith(b"\\n"):
                 if index == len(lines) - 1:
+                    # Remove a torn final record before future appends; otherwise
+                    # later valid JSON would be concatenated to corrupt bytes.
+                    with self.wal_path.open("r+b") as repair:
+                        repair.truncate(valid_bytes)
+                        repair.flush()
+                        if self.fsync:
+                            os.fsync(repair.fileno())
                     break
                 raise QualitativeProcessingError(f"incomplete WAL record at line {index + 1}")
             try:
@@ -133,6 +141,7 @@ class QualitativeResearchEngine:
                 self._apply(event)
                 self._event_fingerprints[event_id] = fingerprint
                 self._sequence = sequence
+                valid_bytes += len(line)
             except Exception as exc:
                 raise QualitativeProcessingError(
                     f"WAL recovery failed at line {index + 1}: {exc}"
