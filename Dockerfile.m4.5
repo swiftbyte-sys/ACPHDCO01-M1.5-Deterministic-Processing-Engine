@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml ./
+COPY src ./src
+COPY benchmarks ./benchmarks
+RUN python -m pip install --no-cache-dir .
+RUN mkdir -p /data
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "benchmarks/run_m4_5_benchmark.py", "--ops", "10000", "--target-rate", "10000", "--workers", "32", "--drop-rate", "0.30", "--telemetry", "/data/m4.5-telemetry.jsonl", "--output", "/data/m4.5-benchmark.json"]
