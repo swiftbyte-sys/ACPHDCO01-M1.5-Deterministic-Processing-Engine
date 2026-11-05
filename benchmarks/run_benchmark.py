@@ -57,6 +57,8 @@ def main():
     logging.basicConfig(level=logging.WARNING)
     wal_path = Path(args.wal or tempfile.mktemp(prefix="acp-m55-", suffix=".wal"))
     wal_path.parent.mkdir(parents=True, exist_ok=True)
+    if wal_path.exists() and wal_path.stat().st_size:
+        parser.error("WAL already exists and is non-empty; use a fresh path: " + str(wal_path))
     engine = ProcessingEngine(wal_path, fsync=True)
 
     latency_us = []
@@ -67,8 +69,8 @@ def main():
     processing_failures = 0
     total_attempts = 0
     total_drops = 0
-    total_retries = 0
     worker_exceptions = []
+    processing_errors = []
     cpu_start = time.process_time()
     start = time.perf_counter()
 
@@ -140,12 +142,11 @@ def main():
             offered_operations.extend(result["offered"])
             total_attempts += result["attempts"]
             total_drops += result["drops"]
-            total_retries += max(0, result["attempts"] - len(result["delivered"]))
             delivery_failures += len(result["failed_delivery_ids"])
             delivered_operations.extend(result["delivered"])
             if result["processing_error"]:
                 processing_failures += len(result["delivered"])
-                worker_exceptions.append(result["processing_error"])
+                processing_errors.append(result["processing_error"])
             else:
                 committed_operations.extend(result["delivered"])
 
@@ -188,7 +189,8 @@ def main():
         "operations_failed_processing": processing_failures,
         "transport_attempts_total": total_attempts,
         "simulated_drops_total": total_drops,
-        "retry_attempts_total": total_retries,
+        "retry_attempts_total": max(0, total_attempts - len(offered_operations)),
+        "processing_errors": processing_errors,
         "unhandled_worker_exceptions": worker_exceptions,
         "elapsed_seconds": round(elapsed, 6),
         "offered_rate_ops_sec": round(len(offered_operations) / elapsed, 2) if elapsed else 0,
