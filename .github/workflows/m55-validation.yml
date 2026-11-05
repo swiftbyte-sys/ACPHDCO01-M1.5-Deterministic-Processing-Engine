@@ -1,0 +1,57 @@
+name: M5.5 validation
+
+on:
+  push:
+    branches:
+      - m5.5-performance-resilience
+  pull_request:
+    branches:
+      - m3.5-qualitative-engine
+      - m5.5-performance-resilience
+
+jobs:
+  test-and-smoke-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest pytest-cov
+
+      - name: Run automated tests and measure coverage
+        run: |
+          pytest -q --cov=acp_engine --cov-report=term-missing --cov-report=xml
+
+      - name: Run durable 30 percent loss smoke benchmark
+        run: |
+          python benchmarks/run_benchmark.py \
+            --ops 1000 \
+            --workers 8 \
+            --target-rate 1000 \
+            --drop-rate 0.30 \
+            --batch-size 32 \
+            --max-attempts 50 \
+            --output m55-smoke-benchmark.json \
+            --wal m55-smoke.wal
+
+      - name: Upload test and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m55-validation-evidence
+          path: |
+            coverage.xml
+            m55-smoke-benchmark.json
+            m55-smoke.wal
+          if-no-files-found: warn
