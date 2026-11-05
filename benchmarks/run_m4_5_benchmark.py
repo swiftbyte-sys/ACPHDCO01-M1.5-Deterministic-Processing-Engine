@@ -147,12 +147,16 @@ def main() -> None:
 
     finish_ns = time.perf_counter_ns()
     elapsed = (finish_ns - start_ns) / 1_000_000_000
-    snapshot = engine.snapshot()
+    live_snapshot = engine.snapshot()
+    recovered_engine = QualitativeResearchEngine(wal_path, fsync=True)
+    snapshot = recovered_engine.snapshot()
     committed = snapshot["evidence_records"]
     successful = sum(1 for item in results if item["status"] == "COMMITTED")
+    recovery_check = "PASS" if snapshot == live_snapshot else "FAIL"
     integrity = (
         "PASS" if committed == args.ops and successful == args.ops
-        and failures == 0 and snapshot["sequence"] == args.ops else "FAIL"
+        and failures == 0 and snapshot["sequence"] == args.ops
+        and recovery_check == "PASS" else "FAIL"
     )
     result = {
         "lab": "ACPHDCO01-M4.5",
@@ -178,6 +182,7 @@ def main() -> None:
         },
         "durable_wal_fsync": True,
         "integrity_check": integrity,
+        "wal_recovery_check": recovery_check,
         "snapshot": snapshot,
         "environment": {
             "python": platform.python_version(),
