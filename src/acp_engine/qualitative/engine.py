@@ -116,7 +116,7 @@ class QualitativeResearchEngine:
         with self.wal_path.open("rb") as stream:
             lines = stream.readlines()
         for index, line in enumerate(lines):
-            if not line.endswith(b"\\n"):
+            if not line.endswith(b"\n"):
                 if index == len(lines) - 1:
                     # Remove a torn final record before future appends; otherwise
                     # later valid JSON would be concatenated to corrupt bytes.
