@@ -102,7 +102,7 @@ def main() -> None:
         }
 
     results = []
-    futures = []
+    futures = {}
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         for index in range(args.ops):
             target_ns = start_ns + int(index * 1_000_000_000 / args.target_rate)
@@ -110,7 +110,8 @@ def main() -> None:
             if remaining_ns > 0:
                 time.sleep(remaining_ns / 1_000_000_000)
             submitted_ns = time.perf_counter_ns()
-            futures.append(pool.submit(deliver, index, submitted_ns))
+            future = pool.submit(deliver, index, submitted_ns)
+            futures[future] = (index, submitted_ns)
 
         for future in as_completed(futures):
             try:
@@ -131,10 +132,12 @@ def main() -> None:
                 )
             except Exception as exc:
                 failures += 1
+                index, submitted_ns = futures[future]
+                latencies_us.append((time.perf_counter_ns() - submitted_ns) / 1000)
                 telemetry.record(
                     operation="evidence_ingest_with_retry",
-                    trace_id=f"m4.5-error-{len(results)}",
-                    started_ns=time.perf_counter_ns(),
+                    trace_id=f"m4.5-{index}",
+                    started_ns=submitted_ns,
                     status_code="ERROR",
                     error_type=type(exc).__name__,
                 )
