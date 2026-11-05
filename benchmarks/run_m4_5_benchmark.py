@@ -129,17 +129,20 @@ def main() -> None:
                     trace_id=f"m4.5-{result['index']}",
                     started_ns=result["submitted_ns"],
                     status_code=status,
+                    completed_ns=result["completed_ns"],
                 )
             except Exception as exc:
                 failures += 1
                 index, submitted_ns = futures[future]
-                latencies_us.append((time.perf_counter_ns() - submitted_ns) / 1000)
+                completed_ns = time.perf_counter_ns()
+                latencies_us.append((completed_ns - submitted_ns) / 1000)
                 telemetry.record(
                     operation="evidence_ingest_with_retry",
                     trace_id=f"m4.5-{index}",
                     started_ns=submitted_ns,
                     status_code="ERROR",
                     error_type=type(exc).__name__,
+                    completed_ns=completed_ns,
                 )
 
     finish_ns = time.perf_counter_ns()
