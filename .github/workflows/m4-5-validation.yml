@@ -4,7 +4,7 @@ on:
   push:
     branches: [m4.5-literature-synthesis-engine]
   pull_request:
-    branches: [m4.5-literature-synthesis-engine]
+    branches: [m3.5-qualitative-engine]
   workflow_dispatch:
 
 permissions:
