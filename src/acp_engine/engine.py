@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
 from typing import Any
-import json, logging, time, uuid
+import json, logging, time, uuid, math, hashlib
 from datetime import datetime, timezone
 
 logger = logging.getLogger("acp.engine")
@@ -30,21 +30,32 @@ class Operation:
         if not isinstance(raw, dict):
             raise ProcessingError("operation must be a JSON object")
         try:
-            op = cls(
-                op_id=str(raw["op_id"]), key=str(raw["key"]),
-                action=str(raw["action"]), value=float(raw["value"]),
-                trace_id=str(raw.get("trace_id") or uuid.uuid4().hex)
-            )
-        except (KeyError, TypeError, ValueError) as exc:
+            op_id, key, action, raw_value = raw["op_id"], raw["key"], raw["action"], raw["value"]
+            trace_id = raw.get("trace_id")
+            if not isinstance(op_id, str) or not isinstance(key, str) or not isinstance(action, str):
+                raise ProcessingError("op_id, key, and action must be strings")
+            if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+                raise ProcessingError("value must be a finite JSON number")
+            value = float(raw_value)
+            if trace_id is None or trace_id == "":
+                trace_id = uuid.uuid4().hex
+            if not isinstance(trace_id, str):
+                raise ProcessingError("trace_id must be a string")
+            op = cls(op_id=op_id, key=key, action=action, value=value, trace_id=trace_id)
+        except KeyError as exc:
+            raise ProcessingError(f"missing operation field: {exc}") from exc
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ProcessingError(f"invalid operation fields: {exc}") from exc
-        if not op.op_id or len(op.op_id) > 128:
-            raise ProcessingError("op_id must contain 1..128 characters")
-        if not op.key or len(op.key) > 128:
-            raise ProcessingError("key must contain 1..128 characters")
+        if not op.op_id.strip() or len(op.op_id) > 128:
+            raise ProcessingError("op_id must contain 1..128 non-whitespace characters")
+        if not op.key.strip() or len(op.key) > 128:
+            raise ProcessingError("key must contain 1..128 non-whitespace characters")
         if op.action not in {"add", "set"}:
             raise ProcessingError("action must be 'add' or 'set'")
-        if not (-1e15 <= op.value <= 1e15):
-            raise ProcessingError("value outside supported numeric bounds")
+        if not math.isfinite(op.value) or not (-1e15 <= op.value <= 1e15):
+            raise ProcessingError("value must be finite and within supported numeric bounds")
+        if len(op.trace_id) > 128:
+            raise ProcessingError("trace_id must contain at most 128 characters")
         return op
 
 class ProcessingEngine:
@@ -56,6 +67,7 @@ class ProcessingEngine:
         self._lock = RLock()
         self._state: dict[str, float] = {}
         self._results: dict[str, dict[str, Any]] = {}
+        self._fingerprints: dict[str, str] = {}
         self._sequence = 0
         self._recover()
 
@@ -76,16 +88,26 @@ class ProcessingEngine:
         }
         logger.info(json.dumps(record, separators=(",", ":")))
 
+    @staticmethod
+    def _fingerprint(op: Operation) -> str:
+        canonical = json.dumps(
+            {"key": op.key, "action": op.action, "value": op.value},
+            sort_keys=True, separators=(",", ":"), allow_nan=False,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
     def _recover(self):
         if not self.wal_path.exists():
             self.wal_path.touch()
             return
-        # A final incomplete line is ignored; all complete records are validated.
         with self.wal_path.open("rb") as fh:
             lines = fh.readlines()
+        valid_bytes = 0
+        torn_tail = False
         for idx, line in enumerate(lines):
             if not line.endswith(b"\n"):
                 if idx == len(lines) - 1:
+                    torn_tail = True
                     break
                 raise ProcessingError(f"corrupt WAL record at line {idx+1}")
             try:
@@ -94,13 +116,24 @@ class ProcessingEngine:
                 seq = int(rec["sequence"])
                 if seq != self._sequence + 1:
                     raise ProcessingError(f"non-contiguous WAL sequence at line {idx+1}")
+                if op.op_id in self._fingerprints:
+                    raise ProcessingError(f"duplicate operation ID in WAL at line {idx+1}")
                 self._apply(op)
                 result = {"op_id": op.op_id, "key": op.key, "value": self._state[op.key],
                           "sequence": seq, "recovered": True}
                 self._results[op.op_id] = result
+                self._fingerprints[op.op_id] = self._fingerprint(op)
                 self._sequence = seq
+                valid_bytes += len(line)
             except Exception as exc:
                 raise ProcessingError(f"WAL recovery failed at line {idx+1}: {exc}") from exc
+        if torn_tail:
+            with self.wal_path.open("r+b") as fh:
+                fh.truncate(valid_bytes)
+                fh.flush()
+                if self.fsync:
+                    import os
+                    os.fsync(fh.fileno())
 
     def _apply(self, op: Operation):
         old = self._state.get(op.key, 0.0)
@@ -112,6 +145,8 @@ class ProcessingEngine:
         with self._lock:
             existing = self._results.get(op.op_id)
             if existing is not None:
+                if self._fingerprints[op.op_id] != self._fingerprint(op):
+                    raise ProcessingError("op_id was already used for a different operation")
                 result = dict(existing)
                 result["duplicate"] = True
                 self._emit(op, started, "200_DUPLICATE", result["sequence"])
@@ -123,7 +158,12 @@ class ProcessingEngine:
             encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
             # WAL first, then state: a crash after WAL write is recovered on restart.
             with self.wal_path.open("ab", buffering=0) as fh:
-                fh.write(encoded)
+                view = memoryview(encoded)
+                while view:
+                    written = fh.write(view)
+                    if not written:
+                        raise OSError("short write while appending WAL")
+                    view = view[written:]
                 if self.fsync:
                     import os
                     os.fsync(fh.fileno())
@@ -132,6 +172,7 @@ class ProcessingEngine:
             result = {"op_id": op.op_id, "key": op.key, "value": self._state[op.key],
                       "sequence": seq, "duplicate": False}
             self._results[op.op_id] = result
+            self._fingerprints[op.op_id] = self._fingerprint(op)
             self._emit(op, started, "200_OK", seq)
             return result
 
@@ -154,12 +195,16 @@ class ProcessingEngine:
             working_state = dict(self._state)
             next_sequence = self._sequence
             pending: dict[str, dict[str, Any]] = {}
+            pending_fingerprints: dict[str, str] = {}
             records = []
             output_specs = []
 
             for op in operations:
                 existing = self._results.get(op.op_id) or pending.get(op.op_id)
                 if existing is not None:
+                    known_fingerprint = self._fingerprints.get(op.op_id) or pending_fingerprints.get(op.op_id)
+                    if known_fingerprint != self._fingerprint(op):
+                        raise ProcessingError("op_id was already used for a different operation")
                     output_specs.append((op, dict(existing), True))
                     continue
 
@@ -172,6 +217,7 @@ class ProcessingEngine:
                     "sequence": next_sequence, "duplicate": False,
                 }
                 pending[op.op_id] = result
+                pending_fingerprints[op.op_id] = self._fingerprint(op)
                 records.append({
                     "sequence": next_sequence,
                     "operation": {
@@ -200,6 +246,7 @@ class ProcessingEngine:
                 self._state = working_state
                 self._sequence = next_sequence
                 self._results.update(pending)
+                self._fingerprints.update(pending_fingerprints)
 
             results = []
             for index, (op, result, duplicate) in enumerate(output_specs):
