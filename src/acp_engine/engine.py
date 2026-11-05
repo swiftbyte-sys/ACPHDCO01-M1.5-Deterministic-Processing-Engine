@@ -57,7 +57,6 @@ class Operation:
         if len(op.trace_id) > 128:
             raise ProcessingError("trace_id must contain at most 128 characters")
         return op
-        return op
 
 class ProcessingEngine:
     """Linearizable in-process state machine with durable append-only WAL."""
