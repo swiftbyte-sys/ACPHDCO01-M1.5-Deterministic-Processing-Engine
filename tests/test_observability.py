@@ -74,3 +74,15 @@ def test_file_sink_creates_parent_and_writes_json(tmp_path):
 def test_record_rejects_invalid_fields(kwargs):
     with pytest.raises(ValueError):
         JsonTelemetry(StringIO()).record(**kwargs)
+
+
+def test_record_uses_supplied_completion_timestamp_for_latency():
+    sink = StringIO()
+    event = JsonTelemetry(sink).record(
+        operation="fixed_interval",
+        trace_id="trace-fixed",
+        started_ns=1_000_000,
+        completed_ns=1_001_500,
+        status_code="OK",
+    )
+    assert event["latency_us"] == 1.5
