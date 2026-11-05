@@ -37,6 +37,7 @@ class JsonTelemetry:
         started_ns: int,
         status_code: str,
         error_type: str | None = None,
+        completed_ns: int | None = None,
     ) -> dict[str, Any]:
         if not operation or not isinstance(operation, str):
             raise ValueError("operation must be non-empty text")
@@ -47,11 +48,15 @@ class JsonTelemetry:
         if not status_code or not isinstance(status_code, str):
             raise ValueError("status_code must be non-empty text")
 
+        end_ns = time.perf_counter_ns() if completed_ns is None else completed_ns
+        if not isinstance(end_ns, int) or end_ns < started_ns:
+            raise ValueError("completed_ns must be an integer greater than or equal to started_ns")
+
         event: dict[str, Any] = {
             "timestamp": self._utc_timestamp(),
             "trace_id": trace_id,
             "operation": operation,
-            "latency_us": round((time.perf_counter_ns() - started_ns) / 1000, 2),
+            "latency_us": round((end_ns - started_ns) / 1000, 2),
             "status_code": status_code,
         }
         if error_type is not None:
