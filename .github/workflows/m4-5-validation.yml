@@ -1,0 +1,48 @@
+name: M4.5 deterministic processing validation
+
+on:
+  push:
+    branches: [m4.5-literature-synthesis-engine]
+  pull_request:
+    branches: [m4.5-literature-synthesis-engine]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m4-5-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r requirements-m2.5.txt
+          pip install -r requirements-m3.5.txt
+          pip install pytest-cov
+      - name: Run complete test suite with coverage
+        run: |
+          pytest -q --cov=acp_engine --cov-report=term-missing --cov-report=xml --junitxml=m4.5-test-results.xml
+      - name: Run 10,000-operation benchmark with 30 percent simulated request loss
+        run: |
+          python benchmarks/run_m4_5_benchmark.py --ops 10000 --target-rate 10000 --workers 32 --drop-rate 0.30 --output m4.5-benchmark.json --telemetry m4.5-telemetry.jsonl
+      - name: Upload M4.5 validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m4.5-validation-evidence
+          path: |
+            m4.5-test-results.xml
+            coverage.xml
+            m4.5-benchmark.json
+            m4.5-telemetry.jsonl
+          if-no-files-found: warn
