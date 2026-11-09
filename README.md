@@ -96,3 +96,19 @@ A production extension would separate ingress from durable commit, introduce bou
 
 ### Scope of claims
 This is an educational, reproducible single-process prototype. It demonstrates deterministic state transitions, thread-safe commits, WAL-based recovery, structured telemetry, and simulated-loss retry behavior. It does not claim distributed consensus, Byzantine fault tolerance, formal verification, multi-host replication, or a proven 10,000 operations/second capacity.
+
+
+## ACPHDCO02-M1.5 upgrade branch
+
+The `acphdco02-m1.5-upgrade` branch contains a correctness-focused revision of the engine:
+
+- A torn final WAL record is truncated during startup recovery before subsequent appends.
+- A malformed complete WAL record fails closed instead of being silently skipped.
+- Reuse of an operation ID with a different key/action/value is rejected as an idempotency conflict. Trace IDs are excluded from the fingerprint because retries may legitimately carry a new trace.
+- Non-finite numeric values (NaN and positive/negative infinity) and boolean values are rejected.
+- The WAL append handle remains open for the engine lifecycle, avoiding a file open/close on every operation.
+- `close()` flushes, optionally fsyncs, and closes the WAL handle; context-manager support is available.
+
+Regression tests cover torn-tail repair followed by a new append and a second restart, idempotency conflicts, invalid numeric values, and recovery behavior.
+
+**Validation status:** these changes have been committed to the upgrade branch, but the test suite and new performance benchmark have not yet been executed in a Python runtime. Do not interpret the changes as proof of the 10,000 operations/second target. The existing 554.08 operations/second result remains the only recorded benchmark until a fresh run is completed.
