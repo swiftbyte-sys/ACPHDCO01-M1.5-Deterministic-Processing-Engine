@@ -66,3 +66,9 @@ The separate processing stress test is opt-in:
 docker compose --profile stress run --rm benchmark
 ```
 This stress test measures the existing deterministic processing subsystem. Its results must be reported separately from the panel-analysis results; passing one does not validate the other.
+
+
+## Validation snapshot (local container run)
+The current processing benchmark logic was exercised with 10,000 submitted operations, 32 workers, a configured 10,000 operations/second offered rate, and 30% simulated pre-receiver request loss. On a Linux x86_64 container reporting 3 CPUs and Python 3.13.5, all 10,000 operations committed with zero handler errors and an integrity check of PASS. Measured throughput was **2,394.27 operations/second**, not 10,000. Latency was P50 11,772.99 µs, P90 22,941.47 µs, P99 45,096.98 µs, and P99.9 65,569.51 µs.
+
+This is a useful resilience result but a performance shortfall. The configured offered rate must not be confused with achieved throughput. The result is environment-specific, is not a sustained soak test, and the loss model is not equivalent to real network partitions. Full JSON evidence is in `results/processing-stress-10k.json`.
