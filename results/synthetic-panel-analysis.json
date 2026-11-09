@@ -1,0 +1,45 @@
+{
+  "data_kind": "synthetic",
+  "observations": 288,
+  "entities": 24,
+  "periods": 12,
+  "panel_regression": {
+    "outcome": "resolution_hours",
+    "specification": "entity and period fixed effects; standard errors clustered by entity",
+    "r_squared": 0.8950312835783131,
+    "ai_adoption": {
+      "estimate": -11.156975844105911,
+      "std_error": 3.408637981730215,
+      "ci95_low": -17.83778352463243,
+      "ci95_high": -4.476168163579391,
+      "p_value": 0.001063568543989245
+    },
+    "test_coverage": {
+      "estimate": -17.299342635128028,
+      "std_error": 3.2395760571074907,
+      "ci95_low": -23.648795032236983,
+      "ci95_high": -10.949890238019073,
+      "p_value": 9.294555438487213e-8
+    }
+  },
+  "observed_path_model": {
+    "model_type": "observed-variable mediation path analysis; not latent-variable SEM",
+    "path_a_ai_adoption_to_coverage": 0.4255287023816168,
+    "path_b_coverage_to_resolution": -17.299342635128017,
+    "direct_effect_ai_adoption_to_resolution": -11.156975844105943,
+    "indirect_effect_a_times_b": -7.361366823581004,
+    "total_effect_direct_plus_indirect": -18.518342667686948,
+    "indirect_effect_cluster_bootstrap_ci95": [
+      -9.715387964051791,
+      -4.726431025566447
+    ],
+    "bootstrap_replicates_requested": 200
+  },
+  "limitations": [
+    "Synthetic results are software-validation evidence, not evidence about real organizations.",
+    "The path model uses observed variables and does not estimate latent constructs or a measurement model.",
+    "Fixed effects do not remove time-varying confounding, reverse causality, or measurement error.",
+    "Cluster-robust inference can be unreliable with few entities; report the number of clusters.",
+    "The panel must be assessed for missingness, selection, and common-shock assumptions before substantive interpretation."
+  ]
+}
