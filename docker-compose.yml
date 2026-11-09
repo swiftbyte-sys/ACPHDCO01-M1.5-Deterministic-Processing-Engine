@@ -1,8 +1,17 @@
 services:
-  benchmark:
+  analytics:
     build: .
     volumes:
       - ./data:/data
     environment:
       PYTHONUNBUFFERED: "1"
+    restart: "no"
+  benchmark:
+    build: .
+    command: ["python", "benchmarks/run_benchmark.py", "--ops", "10000", "--workers", "32", "--target-rate", "10000", "--drop-rate", "0.30", "--output", "/data/processing-benchmark.json", "--wal", "/data/benchmark.wal"]
+    volumes:
+      - ./data:/data
+    environment:
+      PYTHONUNBUFFERED: "1"
+    profiles: ["stress"]
     restart: "no"
