@@ -1,0 +1,36 @@
+{
+  "run_type": "local validation run",
+  "runtime": {
+    "python": "3.13.5",
+    "platform": "Linux x86_64",
+    "reported_cpu_count": 3
+  },
+  "workload": {
+    "operations_submitted": 10000,
+    "target_offered_rate_ops_sec": 10000,
+    "workers": 32,
+    "simulated_request_drop_rate": 0.3
+  },
+  "result": {
+    "operations_committed": 10000,
+    "errors": 0,
+    "elapsed_seconds": 4.17663,
+    "measured_throughput_ops_sec": 2394.27,
+    "integrity_check": "PASS",
+    "mean_retry_attempts": 1.436,
+    "latency_us": {
+      "p50": 11772.99,
+      "p90": 22941.47,
+      "p99": 45096.98,
+      "p99_9": 65569.51,
+      "mean": 13306.06
+    }
+  },
+  "interpretation": "All submitted operations committed and no handler errors were recorded under the simulator's 30% pre-receiver request-drop model. The offered rate was 10,000 operations/sec, but measured throughput was 2,394.27 operations/sec; the 10k sustained-throughput target was not achieved.",
+  "limitations": [
+    "The drop simulator drops requests before receiver processing; this is not a real network partition or arbitrary packet corruption test.",
+    "The run used a 3-CPU container, so results are environment-specific.",
+    "The benchmark is a finite 10,000-operation run, not a sustained soak test.",
+    "The 30% loss result depends on bounded retries and stable operation IDs."
+  ]
+}
