@@ -182,7 +182,7 @@ def analyze_panel(
             frame, replicates=bootstrap_replicates, seed=seed
         )
     else:
-        indirect_low = indirect_high = float("nan")
+        indirect_low = indirect_high = None
     return AnalysisResult(
         data_kind=data_kind,
         observations=len(frame),
