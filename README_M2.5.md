@@ -52,3 +52,17 @@ The indirect-effect interval is estimated by resampling teams (clusters), not in
 - Cluster-robust inference is fragile with a small number of teams. Report the cluster count and avoid treating p-values as definitive.
 - Missing data, selection, reverse causality, measurement validity, and parallel trends (if making a causal before/after claim) require separate investigation.
 - Synthetic-data coefficients are determined partly by the data-generating process and are not empirical findings.
+
+
+## Container deployment
+Build and run the panel analysis:
+```bash
+docker compose up --build analytics
+```
+The output files are written to `./data/panel-analysis-results.json` and `./data/synthetic-panel.csv`.
+
+The separate processing stress test is opt-in:
+```bash
+docker compose --profile stress run --rm benchmark
+```
+This stress test measures the existing deterministic processing subsystem. Its results must be reported separately from the panel-analysis results; passing one does not validate the other.
